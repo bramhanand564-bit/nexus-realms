@@ -1,95 +1,9 @@
 import * as THREE from 'three';
+import { createMaterialLibrary, createSkyDome, applySkyEnvironment } from './core/materials.js';
 import { createHubWorld } from './worlds/hub.js';
 import { createForestWorld } from './worlds/forest.js';
 
-// --- Procedural Realistic Textures (Lightweight, No External Files Needed Yet) ---
-function makeCanvasTex(size, drawFn, repeat = 1) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  drawFn(c.getContext('2d'), size);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(repeat, repeat);
-  return t;
-}
-
-function createTextures() {
-  const stone = makeCanvasTex(256, (ctx, s) => {
-    ctx.fillStyle = '#d6d1c7';
-    ctx.fillRect(0, 0, s, s);
-    for (let i = 0; i < 1800; i++) {
-      ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(90,82,70,0.08)';
-      ctx.fillRect(Math.random() * s, Math.random() * s, 3, 3);
-    }
-    ctx.strokeStyle = 'rgba(110,104,95,0.45)';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(2, 2, s - 4, s - 4);
-    ctx.beginPath();
-    ctx.moveTo(0, s / 2); ctx.lineTo(s, s / 2);
-    ctx.moveTo(s / 2, 0); ctx.lineTo(s / 2, s / 2);
-    ctx.stroke();
-  }, 18);
-
-  const grass = makeCanvasTex(256, (ctx, s) => {
-    ctx.fillStyle = '#627d47';
-    ctx.fillRect(0, 0, s, s);
-    for (let i = 0; i < 3000; i++) {
-      const shades = ['#4e6935', '#769153', '#5c7342', '#7d7356'];
-      ctx.fillStyle = shades[Math.floor(Math.random() * shades.length)];
-      ctx.fillRect(Math.random() * s, Math.random() * s, 2, 5);
-    }
-  }, 24);
-
-  const bark = makeCanvasTex(128, (ctx, s) => {
-    ctx.fillStyle = '#4a3728';
-    ctx.fillRect(0, 0, s, s);
-    for (let i = 0; i < 400; i++) {
-      ctx.fillStyle = Math.random() > 0.5 ? '#36261a' : '#5e4735';
-      ctx.fillRect(Math.random() * s, Math.random() * s, 3, 18);
-    }
-  }, 2);
-
-  return { stone, grass, bark };
-}
-
-// --- Realistic Daylight Sky Dome ---
-function createSky(topColor, horizonColor, sunDir) {
-  const geo = new THREE.SphereGeometry(420, 24, 16);
-  const mat = new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    depthWrite: false,
-    uniforms: {
-      topColor: { value: new THREE.Color(topColor) },
-      horizonColor: { value: new THREE.Color(horizonColor) },
-      sunDir: { value: sunDir.clone().normalize() }
-    },
-    vertexShader: `
-      varying vec3 vPos;
-      void main() {
-        vPos = normalize(position);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: `
-      uniform vec3 topColor;
-      uniform vec3 horizonColor;
-      uniform vec3 sunDir;
-      varying vec3 vPos;
-      void main() {
-        float h = clamp(vPos.y, 0.0, 1.0);
-        vec3 col = mix(horizonColor, topColor, pow(h, 0.55));
-        float sun = max(dot(normalize(vPos), sunDir), 0.0);
-        col += vec3(1.0, 0.94, 0.82) * pow(sun, 180.0) * 1.4;
-        col += vec3(1.0, 0.88, 0.72) * pow(sun, 12.0) * 0.25;
-        gl_FragColor = vec4(col, 1.0);
-      }
-    `
-  });
-  return new THREE.Mesh(geo, mat);
-}
-
-// --- Core Setup ---
+// --- Core Renderer (ACES Filmic Tone Mapping + Shadows) ---
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 let highGfx = true;
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -97,30 +11,89 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.08;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 600);
-const textures = createTextures();
-const helpers = { createSky, textures };
+const camera = new THREE.PerspectiveCamera(64, window.innerWidth / window.innerHeight, 0.1, 650);
 
-// --- Player & State ---
+// Shared Universal Engine Systems
+const windUniforms = { uTime: { value: 0 } };
+const materials = createMaterialLibrary();
+const helpers = {
+  materials,
+  windUniforms,
+  createSky: (top, hor, sunDir) => createSkyDome(top, hor, sunDir, windUniforms),
+  applyEnv: (top, hor, gnd) => applySkyEnvironment(renderer, scene, top, hor, gnd)
+};
+
+// --- Sleek Realistic Explorer Avatar (Third-Person Character) ---
+function createAvatar() {
+  const root = new THREE.Group();
+
+  const suitMat = new THREE.MeshStandardMaterial({ color: 0x262c36, roughness: 0.52, metalness: 0.25 });
+  const armorMat = new THREE.MeshStandardMaterial({ color: 0xdce2e8, roughness: 0.28, metalness: 0.65 });
+  const visorMat = new THREE.MeshStandardMaterial({ color: 0x101c28, roughness: 0.08, metalness: 0.92 });
+  const trimMat = new THREE.MeshBasicMaterial({ color: 0x3ad8ff }); // Minimal subtle accent
+
+  // Legs
+  const legGeo = new THREE.CapsuleGeometry(0.11, 0.52, 4, 8);
+  const leftLeg = new THREE.Mesh(legGeo, suitMat);
+  leftLeg.position.set(-0.15, 0.42, 0); leftLeg.castShadow = true;
+  const rightLeg = new THREE.Mesh(legGeo, suitMat);
+  rightLeg.position.set(0.15, 0.42, 0); rightLeg.castShadow = true;
+
+  // Torso + Jacket Shell
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.42, 6, 10), suitMat);
+  torso.position.y = 1.12; torso.castShadow = true;
+
+  const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.36, 0.32), armorMat);
+  chestPlate.position.set(0, 1.2, 0.02); chestPlate.castShadow = true;
+
+  const backPack = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.34, 0.16), armorMat);
+  backPack.position.set(0, 1.18, 0.22); backPack.castShadow = true;
+
+  const backLight = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.04), trimMat);
+  backLight.position.set(0, 1.25, 0.31);
+
+  // Arms
+  const armGeo = new THREE.CapsuleGeometry(0.085, 0.44, 4, 8);
+  const leftArm = new THREE.Mesh(armGeo, suitMat);
+  leftArm.position.set(-0.34, 1.08, 0); leftArm.castShadow = true;
+  const rightArm = new THREE.Mesh(armGeo, suitMat);
+  rightArm.position.set(0.34, 1.08, 0); rightArm.castShadow = true;
+
+  // Helmet / Head + Reflective Visor
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 12), armorMat);
+  head.position.y = 1.62; head.castShadow = true;
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.11, 0.16), visorMat);
+  visor.position.set(0, 1.63, -0.11);
+
+  root.add(leftLeg, rightLeg, torso, chestPlate, backPack, backLight, leftArm, rightArm, head, visor);
+  scene.add(root);
+
+  return { root, leftLeg, rightLeg, leftArm, rightArm };
+}
+
+const avatar = createAvatar();
+
+// --- Player State ---
 const player = {
-  pos: new THREE.Vector3(0, 1.75, 16),
+  pos: new THREE.Vector3(0, 0, 18), // Ground feet position
   velY: 0,
   yaw: 0,
-  pitch: 0,
-  eyeHeight: 1.72,
+  pitch: -0.16,
+  facingYaw: 0,
   onGround: true,
   sprint: false,
-  bobTimer: 0
+  thirdPerson: true,
+  animTime: 0
 };
 
 let currentWorld = null;
 let worldGroup = null;
 let isTransitioning = false;
-let shardsCollected = new Set();
+const shardsCollected = new Set();
 let activePortal = null;
 
 // --- UI References ---
@@ -135,14 +108,11 @@ function showToast(msg) {
   toastEl.textContent = msg;
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2500);
 }
 
-// --- World Switcher ---
-const WORLDS = {
-  hub: createHubWorld,
-  forest: createForestWorld
-};
+// --- World Management ---
+const WORLDS = { hub: createHubWorld, forest: createForestWorld };
 
 function clearWorld() {
   if (!worldGroup) return;
@@ -150,8 +120,8 @@ function clearWorld() {
   worldGroup.traverse((obj) => {
     if (obj.geometry) obj.geometry.dispose();
     if (obj.material) {
-      if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
-      else obj.material.dispose();
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(m => { if (!m.userData?.shared) m.dispose(); });
     }
   });
   worldGroup = null;
@@ -171,10 +141,11 @@ function loadWorld(id) {
     worldNameEl.textContent = currentWorld.name;
 
     player.pos.copy(currentWorld.spawn);
-    player.pos.y = currentWorld.getHeight(player.pos.x, player.pos.z) + player.eyeHeight;
+    player.pos.y = currentWorld.getHeight(player.pos.x, player.pos.z);
     player.velY = 0;
     player.yaw = currentWorld.spawnYaw || 0;
-    player.pitch = 0;
+    player.facingYaw = player.yaw;
+    player.pitch = player.thirdPerson ? -0.18 : 0;
 
     fadeEl.style.opacity = '0';
     showToast(`Entered: ${currentWorld.name}`);
@@ -182,7 +153,7 @@ function loadWorld(id) {
   }, 450);
 }
 
-// --- Mobile Touch Controls (Multi-Touch Safe) ---
+// --- Multi-Touch Controls ---
 const joyZone = document.getElementById('joystick-zone');
 const joyKnob = document.getElementById('joystick-knob');
 const input = { moveX: 0, moveY: 0 };
@@ -199,18 +170,14 @@ joyZone.addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 joyZone.addEventListener('touchmove', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  for (const t of e.changedTouches) {
-    if (t.identifier === joyTouchId) updateJoy(t);
-  }
+  e.preventDefault(); e.stopPropagation();
+  for (const t of e.changedTouches) if (t.identifier === joyTouchId) updateJoy(t);
 }, { passive: false });
 
 function endJoy(e) {
   for (const t of e.changedTouches) {
     if (t.identifier === joyTouchId) {
-      joyTouchId = null;
-      input.moveX = 0; input.moveY = 0;
+      joyTouchId = null; input.moveX = 0; input.moveY = 0;
       joyKnob.style.transform = 'translate(0px, 0px)';
     }
   }
@@ -220,11 +187,9 @@ joyZone.addEventListener('touchcancel', endJoy);
 
 function updateJoy(touch) {
   const rect = joyZone.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
   const maxR = rect.width * 0.42;
-  let dx = touch.clientX - cx;
-  let dy = touch.clientY - cy;
+  let dx = touch.clientX - cx, dy = touch.clientY - cy;
   const dist = Math.hypot(dx, dy);
   if (dist > maxR) { dx = (dx / dist) * maxR; dy = (dy / dist) * maxR; }
   joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
@@ -232,33 +197,29 @@ function updateJoy(touch) {
   input.moveY = dy / maxR;
 }
 
-// Camera swipe on Canvas
 renderer.domElement.addEventListener('touchstart', (e) => {
   if (lookTouchId !== null) return;
   const t = e.changedTouches[0];
   lookTouchId = t.identifier;
-  lastLookX = t.clientX;
-  lastLookY = t.clientY;
+  lastLookX = t.clientX; lastLookY = t.clientY;
 });
 
 renderer.domElement.addEventListener('touchmove', (e) => {
   e.preventDefault();
   for (const t of e.changedTouches) {
     if (t.identifier === lookTouchId) {
-      const dx = t.clientX - lastLookX;
-      const dy = t.clientY - lastLookY;
-      lastLookX = t.clientX;
-      lastLookY = t.clientY;
-      player.yaw -= dx * 0.0055;
-      player.pitch = Math.max(-1.15, Math.min(1.15, player.pitch - dy * 0.0045));
+      const dx = t.clientX - lastLookX, dy = t.clientY - lastLookY;
+      lastLookX = t.clientX; lastLookY = t.clientY;
+      player.yaw -= dx * 0.0052;
+      const minP = player.thirdPerson ? -0.85 : -1.1;
+      const maxP = player.thirdPerson ? 0.55 : 1.1;
+      player.pitch = Math.max(minP, Math.min(maxP, player.pitch - dy * 0.0042));
     }
   }
 }, { passive: false });
 
 function endLook(e) {
-  for (const t of e.changedTouches) {
-    if (t.identifier === lookTouchId) lookTouchId = null;
-  }
+  for (const t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null;
 }
 renderer.domElement.addEventListener('touchend', endLook);
 renderer.domElement.addEventListener('touchcancel', endLook);
@@ -266,7 +227,7 @@ renderer.domElement.addEventListener('touchcancel', endLook);
 // Buttons
 document.getElementById('jump-btn').addEventListener('touchstart', (e) => {
   e.stopPropagation();
-  if (player.onGround) { player.velY = 8.2; player.onGround = false; }
+  if (player.onGround) { player.velY = 8.4; player.onGround = false; }
 });
 const sprintBtn = document.getElementById('sprint-btn');
 sprintBtn.addEventListener('touchstart', (e) => {
@@ -274,13 +235,25 @@ sprintBtn.addEventListener('touchstart', (e) => {
   player.sprint = !player.sprint;
   sprintBtn.classList.toggle('active', player.sprint);
 });
-actionBtn.addEventListener('click', () => {
+actionBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
   if (activePortal && !activePortal.locked) loadWorld(activePortal.target);
 });
 
-// Graphics Toggle for Smooth FPS
+// Camera Mode Toggle (3rd Person / 1st Person)
+const camBtn = document.getElementById('cam-btn');
+camBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  player.thirdPerson = !player.thirdPerson;
+  avatar.root.visible = player.thirdPerson;
+  camBtn.textContent = player.thirdPerson ? 'CAM: 3RD' : 'CAM: 1ST';
+  showToast(player.thirdPerson ? 'Third-Person View' : 'First-Person View');
+});
+
+// Graphics Toggle
 const gfxBtn = document.getElementById('gfx-btn');
-gfxBtn.addEventListener('click', () => {
+gfxBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
   highGfx = !highGfx;
   renderer.setPixelRatio(highGfx ? Math.min(window.devicePixelRatio, 1.5) : 0.85);
   renderer.shadowMap.enabled = highGfx;
@@ -288,94 +261,118 @@ gfxBtn.addEventListener('click', () => {
   showToast(highGfx ? 'High Graphics Enabled' : 'Performance Mode Enabled');
 });
 
-// Keyboard fallback (if tested on PC)
+// Keyboard fallback
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
-  if (e.code === 'Space' && player.onGround) { player.velY = 8.2; player.onGround = false; }
+  if (e.code === 'Space' && player.onGround) { player.velY = 8.4; player.onGround = false; }
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-// Start Screen
-document.getElementById('play-btn').addEventListener('click', () => {
+// Start Screen + Auto Landscape Lock
+document.getElementById('play-btn').addEventListener('click', async () => {
   document.getElementById('start-screen').style.display = 'none';
-  if (document.documentElement.requestFullscreen) {
-    document.documentElement.requestFullscreen().catch(() => {});
-  }
+  try {
+    if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+    if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
+  } catch (_) {}
 });
 
-// --- Main Game Loop ---
+// --- Main Loop ---
 const clock = new THREE.Clock();
+const camTarget = new THREE.Vector3();
+const desiredCamPos = new THREE.Vector3();
 loadWorld('hub');
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
+  windUniforms.uTime.value = clock.elapsedTime;
 
   if (currentWorld && !isTransitioning) {
-    // Combine Touch + Keyboard
-    let mx = input.moveX;
-    let my = input.moveY;
-    if (keys['KeyW']) my = -1;
-    if (keys['KeyS']) my = 1;
-    if (keys['KeyA']) mx = -1;
-    if (keys['KeyD']) mx = 1;
-    if (keys['ArrowLeft']) player.yaw += 1.8 * dt;
-    if (keys['ArrowRight']) player.yaw -= 1.8 * dt;
+    let mx = input.moveX, my = input.moveY;
+    if (keys['KeyW']) my = -1; if (keys['KeyS']) my = 1;
+    if (keys['KeyA']) mx = -1; if (keys['KeyD']) mx = 1;
+    if (keys['ArrowLeft']) player.yaw += 1.9 * dt;
+    if (keys['ArrowRight']) player.yaw -= 1.9 * dt;
 
-    const speed = (player.sprint || keys['ShiftLeft']) ? 11.5 : 6.4;
+    const speed = (player.sprint || keys['ShiftLeft']) ? 11.2 : 6.2;
     const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
     const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+    const moveDir = new THREE.Vector3().addScaledVector(forward, -my).addScaledVector(right, mx);
+    const isMoving = moveDir.lengthSq() > 0.002;
 
-    const moveDir = new THREE.Vector3()
-      .addScaledVector(forward, -my)
-      .addScaledVector(right, mx);
+    if (isMoving) {
+      moveDir.normalize();
+      player.pos.x += moveDir.x * speed * dt;
+      player.pos.z += moveDir.z * speed * dt;
 
-    if (moveDir.lengthSq() > 0.001) {
-      moveDir.normalize().multiplyScalar(speed * dt);
-      player.pos.x += moveDir.x;
-      player.pos.z += moveDir.z;
-      player.bobTimer += dt * (player.sprint ? 12 : 8);
+      // Smoothly turn character toward walking direction
+      const targetYaw = Math.atan2(-moveDir.x, -moveDir.z);
+      let diff = targetYaw - player.facingYaw;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      player.facingYaw += diff * Math.min(1, dt * 11);
+      player.animTime += dt * (player.sprint ? 12 : 8.5);
     }
 
-    // World boundary clamp
+    // Boundary clamp
     const bound = currentWorld.boundary || 35;
     if (currentWorld.circularBound) {
       const r = Math.hypot(player.pos.x, player.pos.z);
-      if (r > bound) {
-        player.pos.x = (player.pos.x / r) * bound;
-        player.pos.z = (player.pos.z / r) * bound;
-      }
+      if (r > bound) { player.pos.x = (player.pos.x / r) * bound; player.pos.z = (player.pos.z / r) * bound; }
     } else {
       player.pos.x = Math.max(-bound, Math.min(bound, player.pos.x));
       player.pos.z = Math.max(-bound, Math.min(bound, player.pos.z));
     }
 
-    // Gravity & Ground
-    const gravity = currentWorld.gravity || 22;
-    player.velY -= gravity * dt;
+    // Gravity & Ground Height
+    player.velY -= (currentWorld.gravity || 22) * dt;
     player.pos.y += player.velY * dt;
     const groundY = currentWorld.getHeight(player.pos.x, player.pos.z);
-    if (player.pos.y <= groundY + player.eyeHeight) {
-      player.pos.y = groundY + player.eyeHeight;
+    if (player.pos.y <= groundY) {
+      player.pos.y = groundY;
       player.velY = 0;
       player.onGround = true;
     }
 
-    // Camera Transform + Subtle Walk Bob
-    const bob = (player.onGround && moveDir.lengthSq() > 0.001) ? Math.sin(player.bobTimer) * 0.045 : 0;
-    camera.position.set(player.pos.x, player.pos.y + bob, player.pos.z);
-    camera.rotation.order = 'YXZ';
-    camera.rotation.y = player.yaw;
-    camera.rotation.x = player.pitch;
+    // Update Avatar Position & Limb Animation
+    avatar.root.position.copy(player.pos);
+    avatar.root.rotation.y = player.thirdPerson ? player.facingYaw : player.yaw;
+    const swing = isMoving && player.onGround ? Math.sin(player.animTime) * (player.sprint ? 0.72 : 0.45) : 0;
+    avatar.leftLeg.rotation.x = swing;
+    avatar.rightLeg.rotation.x = -swing;
+    avatar.leftArm.rotation.x = -swing * 0.75;
+    avatar.rightArm.rotation.x = swing * 0.75;
+
+    // Camera System (Smooth 3rd-Person Orbit OR 1st-Person)
+    if (player.thirdPerson) {
+      const dist = 4.6;
+      const horiz = Math.cos(player.pitch) * dist;
+      const vert = -Math.sin(player.pitch) * dist;
+      camTarget.set(player.pos.x, player.pos.y + 1.55, player.pos.z);
+      desiredCamPos.set(
+        camTarget.x + Math.sin(player.yaw) * horiz,
+        Math.max(currentWorld.getHeight(camTarget.x, camTarget.z) + 0.55, camTarget.y + vert + 0.4),
+        camTarget.z + Math.cos(player.yaw) * horiz
+      );
+      camera.position.lerp(desiredCamPos, Math.min(1, dt * 14));
+      camera.lookAt(camTarget);
+    } else {
+      const bob = (player.onGround && isMoving) ? Math.sin(player.animTime) * 0.04 : 0;
+      camera.position.set(player.pos.x, player.pos.y + 1.66 + bob, player.pos.z);
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = player.yaw;
+      camera.rotation.x = player.pitch;
+    }
 
     // Check Portals
     let foundPortal = null;
     for (const p of currentWorld.portals) {
       const d = Math.hypot(player.pos.x - p.pos.x, player.pos.z - p.pos.z);
-      if (d < 4.8) {
+      if (d < 5.0) {
         foundPortal = p;
-        if (d < 1.7 && !p.locked) loadWorld(p.target);
+        if (d < 1.8 && !p.locked) loadWorld(p.target);
         break;
       }
     }
@@ -392,7 +389,7 @@ function animate() {
     // Check Code Shards
     if (currentWorld.shards) {
       for (const s of currentWorld.shards) {
-        if (!s.collected && player.pos.distanceTo(s.mesh.position) < 2.6) {
+        if (!s.collected && player.pos.distanceTo(s.mesh.position) < 2.8) {
           s.collected = true;
           s.mesh.visible = false;
           shardsCollected.add(s.id);
