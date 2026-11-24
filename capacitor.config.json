@@ -1,0 +1,8 @@
+{
+  "appId": "com.nexus.realms",
+  "appName": "Nexus Realms",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
