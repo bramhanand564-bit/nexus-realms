@@ -17,16 +17,12 @@
     /* Start Screen */
     #start-screen {
       position: fixed; inset: 0; z-index: 50;
-      background: radial-gradient(circle at center, rgba(22,34,48,0.88), rgba(8,12,18,0.98));
+      background: radial-gradient(circle at center, rgba(20,32,46,0.9), rgba(7,11,16,0.98));
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       color: #fff; text-align: center; padding: 20px;
     }
-    #start-screen h1 {
-      font-size: 30px; letter-spacing: 6px; margin: 0 0 8px; font-weight: 700;
-    }
-    #start-screen p {
-      color: #b8c7d9; font-size: 13px; max-width: 420px; line-height: 1.5; margin-bottom: 22px;
-    }
+    #start-screen h1 { font-size: 30px; letter-spacing: 6px; margin: 0 0 8px; font-weight: 700; }
+    #start-screen p { color: #b8c7d9; font-size: 13px; max-width: 440px; line-height: 1.5; margin-bottom: 22px; }
     #play-btn {
       background: #ffffff; color: #0e141b; border: none;
       padding: 13px 38px; font-size: 14px; font-weight: 700;
@@ -50,15 +46,19 @@
 
     #top-btns { display: flex; gap: 8px; pointer-events: auto; }
     .top-btn {
-      background: rgba(12, 18, 26, 0.62); color: #fff; backdrop-filter: blur(6px);
+      background: rgba(12, 18, 26, 0.65); color: #fff; backdrop-filter: blur(6px);
       border: 1px solid rgba(255,255,255,0.22); border-radius: 10px;
       padding: 7px 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
+    }
+    #studio-btn {
+      border-color: rgba(68, 240, 255, 0.55);
+      color: #7df6ff;
     }
 
     /* Toast */
     #toast {
-      position: fixed; top: 58px; left: 50%; transform: translateX(-50%);
-      z-index: 20; background: rgba(14, 20, 30, 0.85); color: #fff;
+      position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+      z-index: 35; background: rgba(14, 20, 30, 0.88); color: #fff;
       border: 1px solid rgba(255,255,255,0.2); border-radius: 20px;
       padding: 8px 18px; font-size: 12px; opacity: 0; transition: opacity 0.3s;
       pointer-events: none; white-space: nowrap;
@@ -74,7 +74,7 @@
       box-shadow: 0 6px 20px rgba(0,0,0,0.38);
     }
 
-    /* Landscape-Optimized Mobile Controls */
+    /* Mobile Controls */
     #joystick-zone {
       position: fixed; bottom: 22px; left: 26px; width: 116px; height: 116px;
       border-radius: 50%; background: rgba(255,255,255,0.1);
@@ -98,6 +98,75 @@
     }
     .ctrl-btn.active { background: rgba(255,255,255,0.88); color: #0e141b; }
 
+    /* --- CHARACTER STUDIO DRAWER (Right Side Glass Panel) --- */
+    #studio-panel {
+      position: fixed; top: 10px; right: 10px; bottom: 10px; width: 300px; max-width: 52vw;
+      z-index: 30; display: none; flex-direction: column;
+      background: rgba(11, 16, 24, 0.84); backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,0.18); border-radius: 16px;
+      color: #fff; overflow: hidden; box-shadow: 0 12px 35px rgba(0,0,0,0.55);
+      touch-action: pan-y;
+    }
+    #studio-panel.open { display: flex; }
+
+    #studio-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+    }
+    #studio-header span { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; color: #7df6ff; }
+    #studio-close {
+      background: #fff; color: #0e141b; border: none; border-radius: 8px;
+      padding: 5px 12px; font-size: 11px; font-weight: 800;
+    }
+
+    #studio-body {
+      flex: 1; overflow-y: auto; padding: 10px 14px 18px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .st-group { margin-bottom: 11px; }
+    .st-label {
+      display: flex; justify-content: space-between;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.9px;
+      color: #a9bacd; text-transform: uppercase; margin-bottom: 5px;
+    }
+    .st-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .st-pill {
+      flex: 1; min-width: 58px; padding: 6px 6px; font-size: 10px; font-weight: 700;
+      background: rgba(255,255,255,0.08); color: #dce6f2;
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; text-align: center;
+    }
+    .st-pill.active {
+      background: #44f0ff; color: #09131c; border-color: #44f0ff;
+    }
+    .st-swatch {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.28);
+    }
+    .st-swatch.active { border-color: #44f0ff; transform: scale(1.16); }
+
+    #studio-body input[type="range"] {
+      width: 100%; accent-color: #44f0ff; height: 6px;
+    }
+    #studio-body select {
+      width: 100%; background: rgba(255,255,255,0.1); color: #fff;
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+      padding: 6px 8px; font-size: 11px; font-weight: 600;
+    }
+    #studio-body select option { background: #141c27; color: #fff; }
+
+    #studio-hint {
+      position: fixed; bottom: 16px; left: 20px; z-index: 30; display: none;
+      background: rgba(12, 18, 26, 0.72); border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px; padding: 7px 12px; color: #d8e6f5; font-size: 11px;
+      gap: 10px; align-items: center;
+    }
+    #studio-hint.open { display: flex; }
+    #studio-zoom-btn {
+      background: #44f0ff; color: #09131c; border: none; border-radius: 8px;
+      padding: 5px 10px; font-size: 10px; font-weight: 800;
+    }
+
     #fade {
       position: fixed; inset: 0; background: #000; opacity: 0;
       pointer-events: none; z-index: 40; transition: opacity 0.45s ease;
@@ -115,7 +184,7 @@
 <body>
   <div id="start-screen">
     <h1>NEXUS: REALMS</h1>
-    <p>Universal Ultra-Detail Engine • Real-time Reflections, Living Wind Foliage & Third-Person Exploration.</p>
+    <p>Explore portals aur upar <b>STUDIO</b> button se apna character 100% customize karo — Face, Neural Circuits, Hair, Beard, Age, Gender aur Outfits!</p>
     <button id="play-btn">ENTER WORLD</button>
   </div>
 
@@ -125,6 +194,7 @@
       <div id="shard-count">CODE SHARDS: 0 / 1</div>
     </div>
     <div id="top-btns">
+      <button id="studio-btn" class="top-btn">STUDIO</button>
       <button id="cam-btn" class="top-btn">CAM: 3RD</button>
       <button id="gfx-btn" class="top-btn">GFX: HIGH</button>
     </div>
@@ -137,6 +207,109 @@
   <div id="right-controls">
     <div id="sprint-btn" class="ctrl-btn">RUN</div>
     <div id="jump-btn" class="ctrl-btn">JUMP</div>
+  </div>
+
+  <!-- Live 360° Studio Hint & Zoom -->
+  <div id="studio-hint">
+    <span>Swipe left screen to rotate 360°</span>
+    <button id="studio-zoom-btn">ZOOM: FACE</button>
+  </div>
+
+  <!-- CHARACTER CUSTOMIZATION STUDIO -->
+  <div id="studio-panel">
+    <div id="studio-header">
+      <span>CHARACTER STUDIO</span>
+      <button id="studio-close">DONE</button>
+    </div>
+    <div id="studio-body">
+      <div class="st-group">
+        <div class="st-label">Quick Presets</div>
+        <div class="st-row">
+          <button class="st-pill" data-preset="video">Video Hero</button>
+          <button class="st-pill" data-preset="girl">Cyber Girl</button>
+          <button class="st-pill" data-preset="elder">Elder</button>
+          <button class="st-pill" data-preset="random">Random</button>
+        </div>
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Gender</div>
+        <div class="st-row">
+          <button class="st-pill" data-gender="male">Male / Boy</button>
+          <button class="st-pill" data-gender="female">Female / Girl</button>
+        </div>
+      </div>
+
+      <div class="st-group">
+        <div class="st-label"><span>Age (Young → Elder)</span><span id="val-age">16 yrs</span></div>
+        <input id="inp-age" type="range" min="12" max="70" value="16" />
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Skin Tone</div>
+        <div class="st-row" id="sw-skin"></div>
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Eye Color</div>
+        <div class="st-row" id="sw-eye"></div>
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Hair Style</div>
+        <select id="inp-hair-style">
+          <option value="video_short">Textured Short (Video Default)</option>
+          <option value="buzz">Buzz / Fade Cut</option>
+          <option value="medium">Medium Layered</option>
+          <option value="long">Long Flowing</option>
+          <option value="ponytail">Ponytail</option>
+          <option value="spiky">Spiky Futuristic</option>
+        </select>
+      </div>
+
+      <div class="st-group">
+        <div class="st-label"><span>Hair Length</span><span id="val-hair-len">1.0x</span></div>
+        <input id="inp-hair-len" type="range" min="0.6" max="1.5" step="0.05" value="1.0" />
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Hair & Beard Color</div>
+        <div class="st-row" id="sw-hair"></div>
+      </div>
+
+      <div class="st-group">
+        <div class="st-label"><span>Beard Size</span><span id="val-beard">Clean</span></div>
+        <input id="inp-beard" type="range" min="0" max="4" step="1" value="0" />
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Neural Face Circuits</div>
+        <div class="st-row">
+          <button class="st-pill" data-circuit="on">Glow ON</button>
+          <button class="st-pill" data-circuit="off">Glow OFF</button>
+        </div>
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Circuit / Suit Glow Color</div>
+        <div class="st-row" id="sw-glow"></div>
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Outfit / Wearables</div>
+        <select id="inp-outfit">
+          <option value="stealth">Tactical Stealth Suit (Video Default)</option>
+          <option value="jacket">Street Jacket & Cargo</option>
+          <option value="armor">Sci-Fi Explorer Armor</option>
+          <option value="hoodie">Casual Hoodie & Joggers</option>
+        </select>
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Outfit Primary Color</div>
+        <div class="st-row" id="sw-outfit"></div>
+      </div>
+    </div>
   </div>
 
   <div id="fade"></div>
