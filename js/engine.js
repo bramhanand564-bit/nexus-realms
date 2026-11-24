@@ -16,7 +16,7 @@ renderer.toneMappingExposure = 1.08;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.08, 650);
+const camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.06, 650);
 
 // Shared Engine Systems
 const windUniforms = { uTime: { value: 0 } };
@@ -28,10 +28,22 @@ const helpers = {
   applyEnv: (top, hor, gnd) => applySkyEnvironment(renderer, scene, top, hor, gnd)
 };
 
-// Load Saved Character Config (Defaults to Video Hero Look!)
+// --- CINEMATIC 3-POINT STUDIO PORTRAIT LIGHTING RIG (Active only in Studio Mode!) ---
+const studioLightRig = new THREE.Group();
+const keyLight = new THREE.PointLight(0xfff4e8, 2.2, 7.5);
+keyLight.position.set(1.1, 1.95, -1.35);
+const fillLight = new THREE.PointLight(0xd2e8ff, 1.15, 7.5);
+fillLight.position.set(-1.35, 1.55, -1.1);
+const rimLight = new THREE.PointLight(0x66e8ff, 1.85, 6.5);
+rimLight.position.set(0.4, 2.05, 1.25);
+studioLightRig.add(keyLight, fillLight, rimLight);
+studioLightRig.visible = false;
+scene.add(studioLightRig);
+
+// Load Saved Character Config (v2 defaults cleanly to new Pro Hero look!)
 let savedChar = { ...DEFAULT_CHAR_CONFIG };
 try {
-  const raw = localStorage.getItem('nexus_char_v1');
+  const raw = localStorage.getItem('nexus_char_v2');
   if (raw) savedChar = { ...DEFAULT_CHAR_CONFIG, ...JSON.parse(raw) };
 } catch (_) {}
 
@@ -42,7 +54,7 @@ const player = {
   pos: new THREE.Vector3(0, 0, 19),
   velY: 0,
   yaw: 0,
-  pitch: -0.16,
+  pitch: -0.15,
   facingYaw: 0,
   onGround: true,
   sprint: false,
@@ -52,7 +64,7 @@ const player = {
 
 let studioOpen = false;
 let studioFaceZoom = true;
-let studioYaw = 0.35; // Slight dramatic 3/4 portrait angle facing the front!
+let studioYaw = 0.25;
 
 let currentWorld = null;
 let worldGroup = null;
@@ -115,7 +127,7 @@ function loadWorld(id) {
     player.velY = 0;
     player.yaw = currentWorld.spawnYaw || 0;
     player.facingYaw = player.yaw;
-    player.pitch = player.thirdPerson ? -0.16 : 0;
+    player.pitch = player.thirdPerson ? -0.15 : 0;
 
     fadeEl.style.opacity = '0';
     showToast(`Entered: ${currentWorld.name}`);
@@ -124,16 +136,16 @@ function loadWorld(id) {
 }
 
 // --- CHARACTER STUDIO LOGIC & CONTROLS ---
-const SKIN_SWATCHES = ['#f5d5be', '#e4bc9e', '#d29e78', '#b87d56', '#8d593a', '#5a3622'];
-const EYE_SWATCHES = ['#4c7c92', '#2d5a27', '#5a3822', '#22262e', '#3cecff', '#9c4ce8'];
-const HAIR_SWATCHES = ['#1a1614', '#231b16', '#5a3921', '#a67b43', '#c8cdd4', '#7a2222', '#28567a'];
-const GLOW_SWATCHES = ['#44f0ff', '#ff4499', '#55ff88', '#ffbb33', '#9d66ff', '#ffffff'];
-const OUTFIT_SWATCHES = ['#1d222b', '#2b3a4a', '#3b332b', '#2c3d2e', '#592329', '#cfd6de'];
+const SKIN_SWATCHES = ['#f5d5be', '#e6bfa3', '#d29e78', '#b87d56', '#8d593a', '#5a3622'];
+const EYE_SWATCHES = ['#4c7c94', '#2d5a27', '#5a3822', '#22262e', '#3cecff', '#9c4ce8'];
+const HAIR_SWATCHES = ['#1a1614', '#251c17', '#5a3921', '#a67b43', '#c8cdd4', '#7a2222', '#28567a'];
+const GLOW_SWATCHES = ['#7cf7ff', '#ff4499', '#55ff88', '#ffbb33', '#9d66ff', '#ffffff'];
+const OUTFIT_SWATCHES = ['#22262e', '#2b3a4a', '#3b332b', '#2c3d2e', '#592329', '#cfd6de'];
 const BEARD_LABELS = ['Clean', 'Stubble', 'Short Trim', 'Full Beard', 'Long Rugged'];
 
 function saveAndApplyChar(patch) {
   character.rebuild(patch);
-  try { localStorage.setItem('nexus_char_v1', JSON.stringify(character.getConfig())); } catch (_) {}
+  try { localStorage.setItem('nexus_char_v2', JSON.stringify(character.getConfig())); } catch (_) {}
   syncStudioUI();
 }
 
@@ -183,7 +195,6 @@ function syncStudioUI() {
   markSw('sw-outfit', c.outfitColor);
 }
 
-// Studio Inputs Event Wiring
 document.querySelectorAll('[data-gender]').forEach(btn => {
   btn.addEventListener('click', () => {
     const g = btn.dataset.gender;
@@ -204,14 +215,14 @@ document.querySelectorAll('[data-preset]').forEach(btn => {
       const glow = pick(GLOW_SWATCHES);
       saveAndApplyChar({
         gender: g,
-        age: 14 + Math.floor(Math.random() * 50),
+        age: 14 + Math.floor(Math.random() * 48),
         skinTone: pick(SKIN_SWATCHES),
         eyeColor: pick(EYE_SWATCHES),
         hairStyle: pick(['video_short', 'buzz', 'medium', 'long', 'ponytail', 'spiky']),
         hairColor: pick(HAIR_SWATCHES),
-        hairLength: +(0.7 + Math.random() * 0.7).toFixed(2),
+        hairLength: +(0.75 + Math.random() * 0.6).toFixed(2),
         beardSize: g === 'female' ? 0 : Math.floor(Math.random() * 5),
-        circuits: Math.random() > 0.3,
+        circuits: Math.random() > 0.25,
         circuitColor: glow,
         accentColor: glow,
         outfit: pick(['stealth', 'jacket', 'armor', 'hoodie']),
@@ -231,13 +242,14 @@ document.getElementById('inp-outfit').addEventListener('change', e => saveAndApp
 
 function setStudioMode(open) {
   studioOpen = open;
+  studioLightRig.visible = open;
   studioPanel.classList.toggle('open', open);
   studioHint.classList.toggle('open', open);
   joyZone.style.display = open ? 'none' : 'block';
   rightControls.style.display = open ? 'none' : 'flex';
   if (open) {
     character.root.visible = true;
-    studioYaw = player.facingYaw + Math.PI + 0.35; // Face camera directly!
+    studioYaw = player.facingYaw + Math.PI + 0.24; // Dramatic 3/4 portrait angle
     syncStudioUI();
   } else {
     character.root.visible = player.thirdPerson;
@@ -253,7 +265,6 @@ studioZoomBtn.addEventListener('click', (e) => {
   studioZoomBtn.textContent = studioFaceZoom ? 'ZOOM: FACE' : 'ZOOM: BODY';
 });
 
-// Prevent touches inside Studio Panel from rotating the 3D camera
 studioPanel.addEventListener('touchstart', e => e.stopPropagation());
 studioPanel.addEventListener('touchmove', e => e.stopPropagation());
 
@@ -396,6 +407,7 @@ function animate() {
 
   if (currentWorld && !isTransitioning) {
     let isMoving = false;
+    let turnDelta = 0;
 
     if (!studioOpen) {
       let mx = input.moveX, my = input.moveY;
@@ -419,7 +431,9 @@ function animate() {
         let diff = targetYaw - player.facingYaw;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
-        player.facingYaw += diff * Math.min(1, dt * 11);
+        const step = diff * Math.min(1, dt * 11);
+        player.facingYaw += step;
+        turnDelta = step;
         player.animTime += dt * (player.sprint ? 11.5 : 8.2);
       }
 
@@ -442,49 +456,61 @@ function animate() {
       }
     }
 
-    // Position & Animate Character
+    // Position & Animate Character with Real-Time Physics
     character.root.position.copy(player.pos);
     character.root.rotation.y = (player.thirdPerson || studioOpen) ? player.facingYaw : player.yaw;
-    character.updateAnimation(dt, elapsed, isMoving, player.sprint, player.onGround, player.animTime);
+    character.updateAnimation(dt, elapsed, {
+      isMoving,
+      isSprinting: player.sprint,
+      onGround: player.onGround,
+      animTime: player.animTime,
+      velY: player.velY,
+      turnDelta,
+      studioOpen
+    });
 
-    // Camera System: Studio Live Turntable OR Gameplay 3rd/1st Person
+    // Camera System: Studio Portrait Camera OR Gameplay 3rd/1st Person
+    const hScale = character.getHeightScale();
     if (studioOpen) {
-      const dist = studioFaceZoom ? 1.15 : 2.95;
-      const focusY = studioFaceZoom ? 1.48 : 0.96;
-      // Offset look target slightly right so character sits neatly on the LEFT of the Studio drawer!
-      const sideX = Math.cos(studioYaw) * (studioFaceZoom ? 0.24 : 0.62);
-      const sideZ = -Math.sin(studioYaw) * (studioFaceZoom ? 0.24 : 0.62);
+      studioLightRig.position.copy(player.pos);
+      studioLightRig.rotation.y = player.facingYaw;
+
+      const dist = studioFaceZoom ? 0.78 : 2.55;
+      const focusY = (studioFaceZoom ? 1.66 : 0.96) * hScale;
+      const sideOffset = studioFaceZoom ? 0.16 : 0.56;
+      const sideX = Math.cos(studioYaw) * sideOffset;
+      const sideZ = -Math.sin(studioYaw) * sideOffset;
 
       camTarget.set(player.pos.x + sideX, player.pos.y + focusY, player.pos.z + sideZ);
       desiredCamPos.set(
         player.pos.x + Math.sin(studioYaw) * dist + sideX,
-        player.pos.y + focusY + (studioFaceZoom ? 0.04 : 0.22),
+        player.pos.y + focusY + (studioFaceZoom ? 0.02 : 0.18),
         player.pos.z + Math.cos(studioYaw) * dist + sideZ
       );
       camera.position.lerp(desiredCamPos, Math.min(1, dt * 10));
       camera.lookAt(camTarget);
       actionBtn.style.display = 'none';
     } else if (player.thirdPerson) {
-      const dist = 4.2;
+      const dist = 3.9;
       const horiz = Math.cos(player.pitch) * dist;
       const vert = -Math.sin(player.pitch) * dist;
-      camTarget.set(player.pos.x, player.pos.y + 1.45, player.pos.z);
+      camTarget.set(player.pos.x, player.pos.y + 1.48 * hScale, player.pos.z);
       desiredCamPos.set(
         camTarget.x + Math.sin(player.yaw) * horiz,
-        Math.max(currentWorld.getHeight(camTarget.x, camTarget.z) + 0.5, camTarget.y + vert + 0.35),
+        Math.max(currentWorld.getHeight(camTarget.x, camTarget.z) + 0.5, camTarget.y + vert + 0.3),
         camTarget.z + Math.cos(player.yaw) * horiz
       );
       camera.position.lerp(desiredCamPos, Math.min(1, dt * 14));
       camera.lookAt(camTarget);
     } else {
       const bob = (player.onGround && isMoving) ? Math.sin(player.animTime) * 0.035 : 0;
-      camera.position.set(player.pos.x, player.pos.y + 1.60 + bob, player.pos.z);
+      camera.position.set(player.pos.x, player.pos.y + 1.66 * hScale + bob, player.pos.z);
       camera.rotation.order = 'YXZ';
       camera.rotation.y = player.yaw;
       camera.rotation.x = player.pitch;
     }
 
-    // Portals & Shards (only when not editing in Studio)
+    // Portals & Shards
     if (!studioOpen) {
       let foundPortal = null;
       for (const p of currentWorld.portals) {
