@@ -1,32 +1,30 @@
 import * as THREE from 'three';
+import { buildRealisticTrees, buildWavingGrass } from '../core/foliage.js';
 
 function getHeight(x, z) {
-  // Natural rolling hills + carved valley river channel
   const hills =
-    Math.sin(x * 0.045) * Math.cos(z * 0.045) * 4.5 +
-    Math.sin(x * 0.11 + 1.2) * Math.sin(z * 0.09) * 1.4;
+    Math.sin(x * 0.045) * Math.cos(z * 0.045) * 4.6 +
+    Math.sin(x * 0.11 + 1.2) * Math.sin(z * 0.09) * 1.35;
 
-  // River runs smoothly through the valley
   const riverCenter = Math.sin(z * 0.04) * 14 - 12;
   const distToRiver = Math.abs(x - riverCenter);
   const riverCarve = distToRiver < 10 ? -Math.cos((distToRiver / 10) * Math.PI * 0.5) * 3.8 : 0;
 
-  // Keep spawn area relatively flat
   const distSpawn = Math.hypot(x, z - 12);
   const flatFactor = Math.min(1, distSpawn / 14);
-
   return (hills + riverCarve) * flatFactor;
 }
 
 export function createForestWorld(group, scene, helpers, shardsCollected) {
-  // Warm Afternoon Golden Light & Valley Mist
-  scene.fog = new THREE.FogExp2(0xd8e0d5, 0.0085);
-  const sunDir = new THREE.Vector3(-60, 42, -50);
-  group.add(helpers.createSky(0x5282b8, 0xe8dfd1, sunDir));
+  scene.fog = new THREE.FogExp2(0xd6e1d6, 0.0068);
 
-  group.add(new THREE.HemisphereLight(0xfff4e0, 0x45523b, 0.8));
+  const sunDir = new THREE.Vector3(-68, 36, -55);
+  group.add(helpers.createSky(0x4679b3, 0xe8ded0, sunDir));
+  helpers.applyEnv(0x5282b8, 0xe8dfd1, 0x45543a);
 
-  const sun = new THREE.DirectionalLight(0xffe8c2, 1.65);
+  group.add(new THREE.HemisphereLight(0xfff4e0, 0x435238, 0.78));
+
+  const sun = new THREE.DirectionalLight(0xffe6bd, 1.8);
   sun.position.copy(sunDir);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -35,23 +33,24 @@ export function createForestWorld(group, scene, helpers, shardsCollected) {
   sun.shadow.bias = -0.0006;
   group.add(sun);
 
-  // Sculpted Realistic Terrain with Height-Based Vertex Blending
-  const terrainGeo = new THREE.PlaneGeometry(220, 220, 84, 84);
+  const mats = helpers.materials;
+
+  // Normal-Mapped Sculpted Valley Terrain
+  const terrainGeo = new THREE.PlaneGeometry(220, 220, 92, 92);
   terrainGeo.rotateX(-Math.PI / 2);
   const pos = terrainGeo.attributes.position;
   const colors = [];
 
-  const cSand = new THREE.Color(0x9e9278);
-  const cGrass = new THREE.Color(0x5a7842);
-  const cRock = new THREE.Color(0x6e6a63);
+  const cSand = new THREE.Color(0x9e9176);
+  const cGrass = new THREE.Color(0x54733d);
+  const cRock = new THREE.Color(0x6d6a63);
 
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const z = pos.getZ(i);
+    const x = pos.getX(i), z = pos.getZ(i);
     const y = getHeight(x, z);
     pos.setY(i, y);
 
-    let col = cGrass.clone();
+    const col = cGrass.clone();
     if (y < -0.5) col.lerp(cSand, Math.min(1, (-0.5 - y) / 1.5));
     else if (y > 3.2) col.lerp(cRock, Math.min(1, (y - 3.2) / 3.0));
     colors.push(col.r, col.g, col.b);
@@ -59,90 +58,73 @@ export function createForestWorld(group, scene, helpers, shardsCollected) {
   terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   terrainGeo.computeVertexNormals();
 
-  const terrain = new THREE.Mesh(
-    terrainGeo,
-    new THREE.MeshStandardMaterial({
-      map: helpers.textures.grass,
-      vertexColors: true,
-      roughness: 0.92
-    })
-  );
+  const terrain = new THREE.Mesh(terrainGeo, mats.forestGroundMat);
   terrain.receiveShadow = true;
   group.add(terrain);
 
-  // Flowing Valley River
-  const river = new THREE.Mesh(
-    new THREE.PlaneGeometry(220, 220),
-    new THREE.MeshStandardMaterial({
-      color: 0x2c6e78, roughness: 0.12, metalness: 0.35, transparent: true, opacity: 0.85
-    })
-  );
+  // Animated Sparkling Valley River
+  const riverMat = mats.createWaterMaterial(0x1f6270, 0.86, 18);
+  const river = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), riverMat);
   river.rotation.x = -Math.PI / 2;
   river.position.y = -1.35;
   group.add(river);
 
-  // Multi-Tiered Realistic Pine & Forest Trees (Deterministic Placement)
-  const trunkMat = new THREE.MeshStandardMaterial({ map: helpers.textures.bark, roughness: 0.95 });
-  const leafDark = new THREE.MeshStandardMaterial({ color: 0x2f4d27, roughness: 0.85 });
-  const leafLight = new THREE.MeshStandardMaterial({ color: 0x416333, roughness: 0.85 });
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x73706a, roughness: 0.9 });
-
+  // Procedural Realistic Branching Trees + GPU Instanced Wind-Swaying Veined Leaves
   let seed = 42;
   const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 
-  for (let i = 0; i < 85; i++) {
-    const x = (rand() - 0.5) * 160;
-    const z = (rand() - 0.5) * 160;
+  const treeList = [];
+  for (let i = 0; i < 68; i++) {
+    const x = (rand() - 0.5) * 156;
+    const z = (rand() - 0.5) * 156;
     const y = getHeight(x, z);
-
-    // Skip water, spawn pad, and ancient ruin clearing
-    if (y < -0.6) continue;
+    if (y < -0.5) continue;
     if (Math.hypot(x, z - 12) < 13) continue;
-    if (Math.hypot(x - 36, z + 38) < 12) continue;
-
-    const scale = 0.85 + rand() * 0.75;
-    const tree = new THREE.Group();
-    tree.position.set(x, y - 0.2, z);
-
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * scale, 0.38 * scale, 4.2 * scale, 7), trunkMat);
-    trunk.position.y = 2.1 * scale;
-    trunk.castShadow = true;
-    tree.add(trunk);
-
-    for (let layer = 0; layer < 3; layer++) {
-      const cone = new THREE.Mesh(
-        new THREE.ConeGeometry((2.4 - layer * 0.55) * scale, (3.2 - layer * 0.3) * scale, 8),
-        layer % 2 === 0 ? leafDark : leafLight
-      );
-      cone.position.y = (3.4 + layer * 1.7) * scale;
-      cone.castShadow = true;
-      tree.add(cone);
-    }
-    group.add(tree);
+    if (Math.hypot(x - 36, z + 38) < 13) continue;
+    treeList.push({ x, y, z, scale: 0.9 + rand() * 0.7, lush: 1.0 });
   }
+  buildRealisticTrees(group, treeList, mats, helpers.windUniforms);
 
-  // Scattered Natural Boulders
-  for (let i = 0; i < 32; i++) {
+  // Thousands of 3D Waving Grass Blades (Single GPU Draw Call!)
+  buildWavingGrass(group, getHeight, 4800, 74, helpers.windUniforms);
+
+  // Natural Mossy Boulders
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x76746e, roughness: 0.88, metalness: 0.05 });
+  for (let i = 0; i < 34; i++) {
     const x = (rand() - 0.5) * 150;
     const z = (rand() - 0.5) * 150;
     const y = getHeight(x, z);
     if (y < -1.1 || Math.hypot(x, z - 12) < 9) continue;
 
-    const r = 0.6 + rand() * 1.3;
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), rockMat);
-    rock.position.set(x, y + r * 0.35, z);
-    rock.scale.set(1.2, 0.75, 1.0);
+    const r = 0.65 + rand() * 1.35;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 1), rockMat);
+    rock.position.set(x, y + r * 0.3, z);
+    rock.scale.set(1.25, 0.72, 1.0);
     rock.rotation.set(rand() * 3, rand() * 3, 0);
     rock.castShadow = true; rock.receiveShadow = true;
     group.add(rock);
   }
 
-  // --- ANCIENT RUIN & CODE SHARD #1 (Explore at X: 36, Z: -38) ---
+  // Floating Sunlight Pollen / Atmospheric Motes
+  const pCount = 180;
+  const pPos = new Float32Array(pCount * 3);
+  for (let i = 0; i < pCount; i++) {
+    pPos[i * 3] = (rand() - 0.5) * 120;
+    pPos[i * 3 + 1] = 1.5 + rand() * 14;
+    pPos[i * 3 + 2] = (rand() - 0.5) * 120;
+  }
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  const motes = new THREE.Points(
+    pGeo,
+    new THREE.PointsMaterial({ color: 0xfff5d1, size: 0.18, transparent: true, opacity: 0.65 })
+  );
+  group.add(motes);
+
+  // --- ANCIENT RUIN & CODE SHARD #1 (X: 36, Z: -38) ---
   const rx = 36, rz = -38;
   const ry = getHeight(rx, rz);
-  const ruinStone = new THREE.MeshStandardMaterial({ color: 0x999286, roughness: 0.85 });
-
-  const altar = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 5.2, 1.2, 8), ruinStone);
+  const altar = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 5.2, 1.2, 8), mats.stoneMat);
   altar.position.set(rx, ry + 0.4, rz);
   altar.receiveShadow = true;
   group.add(altar);
@@ -150,7 +132,7 @@ export function createForestWorld(group, scene, helpers, shardsCollected) {
   for (let i = 0; i < 5; i++) {
     const ang = (i / 5) * Math.PI * 2;
     const h = 3.2 + (i % 2) * 1.6;
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.9, h, 0.9), ruinStone);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.9, h, 0.9), mats.stoneMat);
     pillar.position.set(rx + Math.cos(ang) * 3.8, ry + h / 2, rz + Math.sin(ang) * 3.8);
     pillar.castShadow = true;
     group.add(pillar);
@@ -160,14 +142,14 @@ export function createForestWorld(group, scene, helpers, shardsCollected) {
   const shardMesh = new THREE.Mesh(
     new THREE.OctahedronGeometry(0.75, 0),
     new THREE.MeshStandardMaterial({
-      color: 0xffd257, emissive: 0xff9d00, emissiveIntensity: 0.85, roughness: 0.15, metalness: 0.8
+      color: 0xffd257, emissive: 0xff9d00, emissiveIntensity: 0.9, roughness: 0.12, metalness: 0.85
     })
   );
   shardMesh.position.set(rx, ry + 2.5, rz);
   shardMesh.visible = !alreadyFound;
   group.add(shardMesh);
 
-  const shardLight = new THREE.PointLight(0xffb833, alreadyFound ? 0 : 2.2, 18);
+  const shardLight = new THREE.PointLight(0xffb833, alreadyFound ? 0 : 2.5, 20);
   shardLight.position.copy(shardMesh.position);
   group.add(shardLight);
 
@@ -177,18 +159,17 @@ export function createForestWorld(group, scene, helpers, shardsCollected) {
   const pGroup = new THREE.Group();
   pGroup.position.set(px, py, pz);
 
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0x454d57, roughness: 0.5, metalness: 0.6 });
-  const pLeft = new THREE.Mesh(new THREE.BoxGeometry(0.7, 5.5, 1), frameMat);
-  pLeft.position.set(-2.2, 2.75, 0);
-  const pRight = new THREE.Mesh(new THREE.BoxGeometry(0.7, 5.5, 1), frameMat);
-  pRight.position.set(2.2, 2.75, 0);
-  const pTop = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.8, 1.1), frameMat);
-  pTop.position.set(0, 5.6, 0);
+  const pLeft = new THREE.Mesh(new THREE.BoxGeometry(0.75, 5.6, 1.0), mats.metalMat);
+  pLeft.position.set(-2.2, 2.8, 0); pLeft.castShadow = true;
+  const pRight = new THREE.Mesh(new THREE.BoxGeometry(0.75, 5.6, 1.0), mats.metalMat);
+  pRight.position.set(2.2, 2.8, 0); pRight.castShadow = true;
+  const pTop = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.85, 1.15), mats.metalMat);
+  pTop.position.set(0, 5.7, 0); pTop.castShadow = true;
   const pCore = new THREE.Mesh(
     new THREE.PlaneGeometry(3.8, 5.1),
-    new THREE.MeshBasicMaterial({ color: 0x6cb8ff, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
+    new THREE.MeshBasicMaterial({ color: 0x6cb8ff, transparent: true, opacity: 0.56, side: THREE.DoubleSide })
   );
-  pCore.position.set(0, 2.6, 0);
+  pCore.position.set(0, 2.65, 0);
   pGroup.add(pLeft, pRight, pTop, pCore);
   group.add(pGroup);
 
@@ -203,13 +184,17 @@ export function createForestWorld(group, scene, helpers, shardsCollected) {
     shards: [{ id: 'forest_shard_1', mesh: shardMesh, collected: alreadyFound }],
     getHeight,
     update: (dt, t) => {
+      riverMat.userData.waterNormal.offset.y += dt * 0.08;
+      riverMat.userData.waterNormal.offset.x += dt * 0.015;
+      motes.rotation.y += dt * 0.015;
+
       if (shardMesh.visible) {
         shardMesh.rotation.y += dt * 1.4;
-        shardMesh.position.y = ry + 2.5 + Math.sin(t * 2.2) * 0.3;
+        shardMesh.position.y = ry + 2.5 + Math.sin(t * 2.2) * 0.28;
       } else {
         shardLight.intensity = 0;
       }
-      pCore.material.opacity = 0.52 + Math.sin(t * 2.5) * 0.14;
+      pCore.material.opacity = 0.5 + Math.sin(t * 2.5) * 0.14;
     }
   };
 }
