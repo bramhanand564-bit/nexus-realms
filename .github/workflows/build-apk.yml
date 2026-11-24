@@ -35,12 +35,11 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-            - name: Add & Sync Android Platform
+      - name: Add & Sync Android Platform (Landscape Locked)
         run: |
           npx cap add android
           sed -i 's/android:name=".MainActivity"/android:name=".MainActivity" android:screenOrientation="sensorLandscape"/' android/app/src/main/AndroidManifest.xml
           npx cap sync android
-
 
       - name: Build Debug APK
         run: |
