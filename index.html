@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>NEXUS: REALMS</title>
+  <!--
+    3D Human Base Avatars: Microsoft Rocketbox Avatar Library,
+    Copyright (c) 2020 Microsoft, MIT License (via codepawl/rocketbox-avatars-glb).
+  -->
   <style>
     * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
     html, body {
@@ -17,17 +21,17 @@
     /* Start Screen */
     #start-screen {
       position: fixed; inset: 0; z-index: 50;
-      background: radial-gradient(circle at center, rgba(20,32,46,0.9), rgba(7,11,16,0.98));
+      background: radial-gradient(circle at center, rgba(16,32,48,0.92), rgba(6,10,16,0.98));
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       color: #fff; text-align: center; padding: 20px;
     }
     #start-screen h1 { font-size: 30px; letter-spacing: 6px; margin: 0 0 8px; font-weight: 700; }
-    #start-screen p { color: #b8c7d9; font-size: 13px; max-width: 440px; line-height: 1.5; margin-bottom: 22px; }
+    #start-screen p { color: #b8c7d9; font-size: 13px; max-width: 460px; line-height: 1.5; margin-bottom: 22px; }
     #play-btn {
       background: #ffffff; color: #0e141b; border: none;
       padding: 13px 38px; font-size: 14px; font-weight: 700;
       letter-spacing: 2px; border-radius: 30px; cursor: pointer;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.45);
     }
 
     /* HUD */
@@ -50,12 +54,9 @@
       border: 1px solid rgba(255,255,255,0.22); border-radius: 10px;
       padding: 7px 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
     }
-    #studio-btn {
-      border-color: rgba(68, 240, 255, 0.55);
-      color: #7df6ff;
-    }
+    #studio-btn { border-color: rgba(68, 240, 255, 0.6); color: #7df6ff; }
 
-    /* Toast */
+    /* Toast & Real 3D Model Loader Pill */
     #toast {
       position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
       z-index: 35; background: rgba(14, 20, 30, 0.88); color: #fff;
@@ -64,6 +65,21 @@
       pointer-events: none; white-space: nowrap;
     }
     #toast.show { opacity: 1; }
+
+    #char-loading {
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+      z-index: 36; display: none; align-items: center; gap: 8px;
+      background: rgba(6, 22, 34, 0.88); border: 1px solid rgba(68, 240, 255, 0.45);
+      border-radius: 20px; padding: 6px 14px; color: #9df8ff; font-size: 11px; font-weight: 600;
+      pointer-events: none;
+    }
+    #char-loading.show { display: flex; }
+    .mini-spin {
+      width: 12px; height: 12px; border-radius: 50%;
+      border: 2px solid rgba(68, 240, 255, 0.25); border-top-color: #44f0ff;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Portal Action Button */
     #action-btn {
@@ -98,13 +114,13 @@
     }
     .ctrl-btn.active { background: rgba(255,255,255,0.88); color: #0e141b; }
 
-    /* --- CHARACTER STUDIO DRAWER (Right Side Glass Panel) --- */
+    /* --- REAL 3D CHARACTER STUDIO DRAWER --- */
     #studio-panel {
-      position: fixed; top: 10px; right: 10px; bottom: 10px; width: 300px; max-width: 52vw;
+      position: fixed; top: 10px; right: 10px; bottom: 10px; width: 304px; max-width: 52vw;
       z-index: 30; display: none; flex-direction: column;
-      background: rgba(11, 16, 24, 0.84); backdrop-filter: blur(14px);
-      border: 1px solid rgba(255,255,255,0.18); border-radius: 16px;
-      color: #fff; overflow: hidden; box-shadow: 0 12px 35px rgba(0,0,0,0.55);
+      background: rgba(9, 16, 25, 0.86); backdrop-filter: blur(14px);
+      border: 1px solid rgba(80, 230, 255, 0.28); border-radius: 16px;
+      color: #fff; overflow: hidden; box-shadow: 0 12px 35px rgba(0,0,0,0.58);
       touch-action: pan-y;
     }
     #studio-panel.open { display: flex; }
@@ -112,9 +128,9 @@
     #studio-header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.04);
+      background: rgba(0, 220, 255, 0.06);
     }
-    #studio-header span { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; color: #7df6ff; }
+    #studio-header span { font-size: 11.5px; font-weight: 800; letter-spacing: 1.4px; color: #7df6ff; }
     #studio-close {
       background: #fff; color: #0e141b; border: none; border-radius: 8px;
       padding: 5px 12px; font-size: 11px; font-weight: 800;
@@ -136,18 +152,14 @@
       background: rgba(255,255,255,0.08); color: #dce6f2;
       border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; text-align: center;
     }
-    .st-pill.active {
-      background: #44f0ff; color: #09131c; border-color: #44f0ff;
-    }
+    .st-pill.active { background: #44f0ff; color: #09131c; border-color: #44f0ff; }
     .st-swatch {
       width: 24px; height: 24px; border-radius: 50%;
       border: 2px solid rgba(255,255,255,0.28);
     }
     .st-swatch.active { border-color: #44f0ff; transform: scale(1.16); }
 
-    #studio-body input[type="range"] {
-      width: 100%; accent-color: #44f0ff; height: 6px;
-    }
+    #studio-body input[type="range"] { width: 100%; accent-color: #44f0ff; height: 6px; }
     #studio-body select {
       width: 100%; background: rgba(255,255,255,0.1); color: #fff;
       border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
@@ -157,7 +169,7 @@
 
     #studio-hint {
       position: fixed; bottom: 16px; left: 20px; z-index: 30; display: none;
-      background: rgba(12, 18, 26, 0.72); border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(12, 18, 26, 0.78); border: 1px solid rgba(255,255,255,0.2);
       border-radius: 12px; padding: 7px 12px; color: #d8e6f5; font-size: 11px;
       gap: 10px; align-items: center;
     }
@@ -176,7 +188,8 @@
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
       }
     }
   </script>
@@ -184,7 +197,7 @@
 <body>
   <div id="start-screen">
     <h1>NEXUS: REALMS</h1>
-    <p>Explore portals aur upar <b>STUDIO</b> button se apna character 100% customize karo — Face, Neural Circuits, Hair, Beard, Age, Gender aur Outfits!</p>
+    <p>Real 3D Studio Humans + Cybernetic Circuits + Living Worlds. Upar <b>STUDIO</b> button se apna character customize karo!</p>
     <button id="play-btn">ENTER WORLD</button>
   </div>
 
@@ -200,6 +213,7 @@
     </div>
   </div>
 
+  <div id="char-loading"><div class="mini-spin"></div><span id="char-loading-txt">Loading 3D Human...</span></div>
   <div id="toast"></div>
   <button id="action-btn">ENTER PORTAL</button>
 
@@ -209,40 +223,43 @@
     <div id="jump-btn" class="ctrl-btn">JUMP</div>
   </div>
 
-  <!-- Live 360° Studio Hint & Zoom -->
   <div id="studio-hint">
     <span>Swipe left screen to rotate 360°</span>
     <button id="studio-zoom-btn">ZOOM: FACE</button>
   </div>
 
-  <!-- CHARACTER CUSTOMIZATION STUDIO -->
+  <!-- REAL 3D HUMAN CHARACTER STUDIO -->
   <div id="studio-panel">
     <div id="studio-header">
-      <span>CHARACTER STUDIO</span>
+      <span>REAL 3D STUDIO</span>
       <button id="studio-close">DONE</button>
     </div>
     <div id="studio-body">
       <div class="st-group">
         <div class="st-label">Quick Presets</div>
         <div class="st-row">
-          <button class="st-pill" data-preset="video">Video Hero</button>
+          <button class="st-pill" data-preset="video">Cyber Boy</button>
           <button class="st-pill" data-preset="girl">Cyber Girl</button>
-          <button class="st-pill" data-preset="elder">Elder</button>
-          <button class="st-pill" data-preset="random">Random</button>
+          <button class="st-pill" data-preset="adult">Adult Hero</button>
+          <button class="st-pill" data-preset="pilot">Pilot</button>
         </div>
       </div>
 
       <div class="st-group">
-        <div class="st-label">Gender</div>
-        <div class="st-row">
-          <button class="st-pill" data-gender="male">Male / Boy</button>
-          <button class="st-pill" data-gender="female">Female / Girl</button>
-        </div>
+        <div class="st-label">3D Human Base Model</div>
+        <select id="inp-avatar">
+          <option value="boy1">Cyber Boy 01 (Young Male)</option>
+          <option value="boy2">Cyber Boy 02 (Young Male)</option>
+          <option value="girl1">Cyber Girl 01 (Young Female)</option>
+          <option value="male1">Adult Male Hero</option>
+          <option value="female1">Adult Female Hero</option>
+          <option value="pilot1">Tactical Pilot (Adult Male)</option>
+        </select>
       </div>
 
       <div class="st-group">
-        <div class="st-label"><span>Age (Young → Elder)</span><span id="val-age">16 yrs</span></div>
-        <input id="inp-age" type="range" min="12" max="70" value="16" />
+        <div class="st-label"><span>Height Scale</span><span id="val-height">1.00x</span></div>
+        <input id="inp-height" type="range" min="0.86" max="1.14" step="0.02" value="1.00" />
       </div>
 
       <div class="st-group">
@@ -251,39 +268,12 @@
       </div>
 
       <div class="st-group">
-        <div class="st-label">Eye Color</div>
-        <div class="st-row" id="sw-eye"></div>
-      </div>
-
-      <div class="st-group">
-        <div class="st-label">Hair Style</div>
-        <select id="inp-hair-style">
-          <option value="video_short">Textured Short (Video Default)</option>
-          <option value="buzz">Buzz / Fade Cut</option>
-          <option value="medium">Medium Layered</option>
-          <option value="long">Long Flowing</option>
-          <option value="ponytail">Ponytail</option>
-          <option value="spiky">Spiky Futuristic</option>
-        </select>
-      </div>
-
-      <div class="st-group">
-        <div class="st-label"><span>Hair Length</span><span id="val-hair-len">1.0x</span></div>
-        <input id="inp-hair-len" type="range" min="0.6" max="1.5" step="0.05" value="1.0" />
-      </div>
-
-      <div class="st-group">
-        <div class="st-label">Hair & Beard Color</div>
+        <div class="st-label">Hair Color</div>
         <div class="st-row" id="sw-hair"></div>
       </div>
 
       <div class="st-group">
-        <div class="st-label"><span>Beard Size</span><span id="val-beard">Clean</span></div>
-        <input id="inp-beard" type="range" min="0" max="4" step="1" value="0" />
-      </div>
-
-      <div class="st-group">
-        <div class="st-label">Neural Face Circuits</div>
+        <div class="st-label">Neural Face & Neck Circuits</div>
         <div class="st-row">
           <button class="st-pill" data-circuit="on">Glow ON</button>
           <button class="st-pill" data-circuit="off">Glow OFF</button>
@@ -291,22 +281,26 @@
       </div>
 
       <div class="st-group">
-        <div class="st-label">Circuit / Suit Glow Color</div>
+        <div class="st-label"><span>Circuit Glow Strength</span><span id="val-circuit-glow">1.45</span></div>
+        <input id="inp-circuit-glow" type="range" min="0.2" max="2.4" step="0.05" value="1.45" />
+      </div>
+
+      <div class="st-group">
+        <div class="st-label">Circuit & Suit Glow Color</div>
         <div class="st-row" id="sw-glow"></div>
       </div>
 
       <div class="st-group">
-        <div class="st-label">Outfit / Wearables</div>
+        <div class="st-label">Outfit Style</div>
         <select id="inp-outfit">
-          <option value="stealth">Tactical Stealth Suit (Video Default)</option>
-          <option value="jacket">Street Jacket & Cargo</option>
-          <option value="armor">Sci-Fi Explorer Armor</option>
-          <option value="hoodie">Casual Hoodie & Joggers</option>
+          <option value="stealth">Sci-Fi Stealth Jacket (Video Look)</option>
+          <option value="armor">Tactical Metallic Armor</option>
+          <option value="casual">Original Realistic Outfit</option>
         </select>
       </div>
 
       <div class="st-group">
-        <div class="st-label">Outfit Primary Color</div>
+        <div class="st-label">Suit Primary Color</div>
         <div class="st-row" id="sw-outfit"></div>
       </div>
     </div>
