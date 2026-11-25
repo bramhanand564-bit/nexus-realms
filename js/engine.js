@@ -28,54 +28,24 @@ const helpers = {
   applyEnv: (top, hor, gnd) => applySkyEnvironment(renderer, scene, top, hor, gnd)
 };
 
-// --- CINEMATIC 3-POINT STUDIO PORTRAIT LIGHTING RIG (Active only in Studio Mode!) ---
+// --- CINEMATIC 3-POINT STUDIO PORTRAIT LIGHTING RIG (Active in Studio Mode) ---
 const studioLightRig = new THREE.Group();
-const keyLight = new THREE.PointLight(0xfff4e8, 2.2, 7.5);
-keyLight.position.set(1.1, 1.95, -1.35);
-const fillLight = new THREE.PointLight(0xd2e8ff, 1.15, 7.5);
-fillLight.position.set(-1.35, 1.55, -1.1);
-const rimLight = new THREE.PointLight(0x66e8ff, 1.85, 6.5);
-rimLight.position.set(0.4, 2.05, 1.25);
+const keyLight = new THREE.PointLight(0xfff2e4, 2.3, 7.5);
+keyLight.position.set(1.0, 1.75, -1.35);
+const fillLight = new THREE.PointLight(0xcbe8ff, 1.1, 7.5);
+fillLight.position.set(-1.25, 1.45, -1.05);
+const rimLight = new THREE.PointLight(0x40eeff, 2.1, 6.5);
+rimLight.position.set(-0.5, 1.85, 1.25);
 studioLightRig.add(keyLight, fillLight, rimLight);
 studioLightRig.visible = false;
 scene.add(studioLightRig);
-
-// Load Saved Character Config (v2 defaults cleanly to new Pro Hero look!)
-let savedChar = { ...DEFAULT_CHAR_CONFIG };
-try {
-  const raw = localStorage.getItem('nexus_char_v2');
-  if (raw) savedChar = { ...DEFAULT_CHAR_CONFIG, ...JSON.parse(raw) };
-} catch (_) {}
-
-const character = createCharacterSystem(scene, savedChar);
-
-// --- Player & Studio State ---
-const player = {
-  pos: new THREE.Vector3(0, 0, 19),
-  velY: 0,
-  yaw: 0,
-  pitch: -0.15,
-  facingYaw: 0,
-  onGround: true,
-  sprint: false,
-  thirdPerson: true,
-  animTime: 0
-};
-
-let studioOpen = false;
-let studioFaceZoom = true;
-let studioYaw = 0.25;
-
-let currentWorld = null;
-let worldGroup = null;
-let isTransitioning = false;
-const shardsCollected = new Set();
-let activePortal = null;
 
 // --- UI Elements ---
 const worldNameEl = document.getElementById('world-name');
 const shardEl = document.getElementById('shard-count');
 const toastEl = document.getElementById('toast');
+const charLoadingEl = document.getElementById('char-loading');
+const charLoadingTxt = document.getElementById('char-loading-txt');
 const actionBtn = document.getElementById('action-btn');
 const fadeEl = document.getElementById('fade');
 const joyZone = document.getElementById('joystick-zone');
@@ -92,6 +62,42 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
 }
+
+// Load Saved Real 3D Human Config
+let savedChar = { ...DEFAULT_CHAR_CONFIG };
+try {
+  const raw = localStorage.getItem('nexus_real3d_v1');
+  if (raw) savedChar = { ...DEFAULT_CHAR_CONFIG, ...JSON.parse(raw) };
+} catch (_) {}
+
+const character = createCharacterSystem(scene, savedChar, (isLoading, msg) => {
+  charLoadingEl.classList.toggle('show', isLoading);
+  if (msg) charLoadingTxt.textContent = msg;
+  if (!isLoading && msg) showToast(msg);
+});
+
+// --- Player & Studio State ---
+const player = {
+  pos: new THREE.Vector3(0, 0, 19),
+  velY: 0,
+  yaw: 0,
+  pitch: -0.15,
+  facingYaw: 0,
+  onGround: true,
+  sprint: false,
+  thirdPerson: true,
+  animTime: 0
+};
+
+let studioOpen = false;
+let studioFaceZoom = true;
+let studioYaw = Math.PI - 0.36;
+
+let currentWorld = null;
+let worldGroup = null;
+let isTransitioning = false;
+const shardsCollected = new Set();
+let activePortal = null;
 
 // --- World Switcher ---
 const WORLDS = { hub: createHubWorld, forest: createForestWorld };
@@ -135,17 +141,15 @@ function loadWorld(id) {
   }, 450);
 }
 
-// --- CHARACTER STUDIO LOGIC & CONTROLS ---
-const SKIN_SWATCHES = ['#f5d5be', '#e6bfa3', '#d29e78', '#b87d56', '#8d593a', '#5a3622'];
-const EYE_SWATCHES = ['#4c7c94', '#2d5a27', '#5a3822', '#22262e', '#3cecff', '#9c4ce8'];
-const HAIR_SWATCHES = ['#1a1614', '#251c17', '#5a3921', '#a67b43', '#c8cdd4', '#7a2222', '#28567a'];
-const GLOW_SWATCHES = ['#7cf7ff', '#ff4499', '#55ff88', '#ffbb33', '#9d66ff', '#ffffff'];
-const OUTFIT_SWATCHES = ['#22262e', '#2b3a4a', '#3b332b', '#2c3d2e', '#592329', '#cfd6de'];
-const BEARD_LABELS = ['Clean', 'Stubble', 'Short Trim', 'Full Beard', 'Long Rugged'];
+// --- REAL 3D STUDIO CONTROLS ---
+const SKIN_SWATCHES = ['#ffffff', '#ffe9d6', '#e6c1a2', '#c8926c', '#9c6848', '#6b422a'];
+const HAIR_SWATCHES = ['natural', '#171412', '#4a301e', '#b58e52', '#c8cdd4', '#7a2228', '#225885'];
+const GLOW_SWATCHES = ['#38f2ff', '#ff4499', '#55ff88', '#ffbb33', '#a366ff', '#ffffff'];
+const OUTFIT_SWATCHES = ['#1b2330', '#12151b', '#2b384a', '#2b3a2e', '#4c2228', '#c8d1dc'];
 
 function saveAndApplyChar(patch) {
   character.rebuild(patch);
-  try { localStorage.setItem('nexus_char_v2', JSON.stringify(character.getConfig())); } catch (_) {}
+  try { localStorage.setItem('nexus_real3d_v1', JSON.stringify(character.getConfig())); } catch (_) {}
   syncStudioUI();
 }
 
@@ -155,50 +159,49 @@ function buildSwatches(containerId, colors, key) {
   colors.forEach((col) => {
     const btn = document.createElement('button');
     btn.className = 'st-swatch';
-    btn.style.background = col;
+    btn.style.background = col === 'natural'
+      ? 'linear-gradient(135deg, #4b382a, #1d1612)'
+      : col;
+    btn.title = col === 'natural' ? 'Natural Hair' : col;
     btn.dataset.val = col;
-    btn.addEventListener('click', () => {
-      if (key === 'glow') saveAndApplyChar({ circuitColor: col, accentColor: col });
-      else saveAndApplyChar({ [key]: col });
-    });
+    btn.addEventListener('click', () => saveAndApplyChar({ [key]: col }));
     el.appendChild(btn);
   });
 }
 
-buildSwatches('sw-skin', SKIN_SWATCHES, 'skinTone');
-buildSwatches('sw-eye', EYE_SWATCHES, 'eyeColor');
-buildSwatches('sw-hair', HAIR_SWATCHES, 'hairColor');
-buildSwatches('sw-glow', GLOW_SWATCHES, 'glow');
+buildSwatches('sw-skin', SKIN_SWATCHES, 'skinTint');
+buildSwatches('sw-hair', HAIR_SWATCHES, 'hairTint');
+buildSwatches('sw-glow', GLOW_SWATCHES, 'circuitColor');
 buildSwatches('sw-outfit', OUTFIT_SWATCHES, 'outfitColor');
 
 function syncStudioUI() {
   const c = character.getConfig();
-  document.getElementById('inp-age').value = c.age;
-  document.getElementById('val-age').textContent = `${c.age} yrs`;
-  document.getElementById('inp-hair-style').value = c.hairStyle;
-  document.getElementById('inp-hair-len').value = c.hairLength;
-  document.getElementById('val-hair-len').textContent = `${c.hairLength.toFixed(2)}x`;
-  document.getElementById('inp-beard').value = c.beardSize;
-  document.getElementById('val-beard').textContent = BEARD_LABELS[c.beardSize] || 'Clean';
+  document.getElementById('inp-avatar').value = c.avatarId;
+  document.getElementById('inp-height').value = c.heightScale;
+  document.getElementById('val-height').textContent = `${c.heightScale.toFixed(2)}x`;
+  document.getElementById('inp-circuit-glow').value = c.circuitIntensity;
+  document.getElementById('val-circuit-glow').textContent = c.circuitIntensity.toFixed(2);
   document.getElementById('inp-outfit').value = c.outfit;
 
-  document.querySelectorAll('[data-gender]').forEach(b => b.classList.toggle('active', b.dataset.gender === c.gender));
-  document.querySelectorAll('[data-circuit]').forEach(b => b.classList.toggle('active', (b.dataset.circuit === 'on') === c.circuits));
+  document.querySelectorAll('[data-circuit]').forEach(b => {
+    b.classList.toggle('active', (b.dataset.circuit === 'on') === c.circuits);
+  });
 
   const markSw = (id, val) => {
-    document.querySelectorAll(`#${id} .st-swatch`).forEach(s => s.classList.toggle('active', s.dataset.val.toLowerCase() === val.toLowerCase()));
+    document.querySelectorAll(`#${id} .st-swatch`).forEach(s => {
+      s.classList.toggle('active', s.dataset.val.toLowerCase() === (val || '').toLowerCase());
+    });
   };
-  markSw('sw-skin', c.skinTone);
-  markSw('sw-eye', c.eyeColor);
-  markSw('sw-hair', c.hairColor);
+  markSw('sw-skin', c.skinTint);
+  markSw('sw-hair', c.hairTint);
   markSw('sw-glow', c.circuitColor);
   markSw('sw-outfit', c.outfitColor);
 }
 
-document.querySelectorAll('[data-gender]').forEach(btn => {
+document.querySelectorAll('[data-preset]').forEach(btn => {
   btn.addEventListener('click', () => {
-    const g = btn.dataset.gender;
-    saveAndApplyChar({ gender: g, beardSize: g === 'female' ? 0 : character.getConfig().beardSize });
+    const p = CHAR_PRESETS[btn.dataset.preset];
+    if (p) saveAndApplyChar(p);
   });
 });
 
@@ -206,38 +209,9 @@ document.querySelectorAll('[data-circuit]').forEach(btn => {
   btn.addEventListener('click', () => saveAndApplyChar({ circuits: btn.dataset.circuit === 'on' }));
 });
 
-document.querySelectorAll('[data-preset]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const p = btn.dataset.preset;
-    if (p === 'random') {
-      const pick = arr => arr[Math.floor(Math.random() * arr.length)];
-      const g = Math.random() > 0.5 ? 'male' : 'female';
-      const glow = pick(GLOW_SWATCHES);
-      saveAndApplyChar({
-        gender: g,
-        age: 14 + Math.floor(Math.random() * 48),
-        skinTone: pick(SKIN_SWATCHES),
-        eyeColor: pick(EYE_SWATCHES),
-        hairStyle: pick(['video_short', 'buzz', 'medium', 'long', 'ponytail', 'spiky']),
-        hairColor: pick(HAIR_SWATCHES),
-        hairLength: +(0.75 + Math.random() * 0.6).toFixed(2),
-        beardSize: g === 'female' ? 0 : Math.floor(Math.random() * 5),
-        circuits: Math.random() > 0.25,
-        circuitColor: glow,
-        accentColor: glow,
-        outfit: pick(['stealth', 'jacket', 'armor', 'hoodie']),
-        outfitColor: pick(OUTFIT_SWATCHES)
-      });
-    } else if (CHAR_PRESETS[p]) {
-      saveAndApplyChar(CHAR_PRESETS[p]);
-    }
-  });
-});
-
-document.getElementById('inp-age').addEventListener('input', e => saveAndApplyChar({ age: parseInt(e.target.value, 10) }));
-document.getElementById('inp-hair-style').addEventListener('change', e => saveAndApplyChar({ hairStyle: e.target.value }));
-document.getElementById('inp-hair-len').addEventListener('input', e => saveAndApplyChar({ hairLength: parseFloat(e.target.value) }));
-document.getElementById('inp-beard').addEventListener('input', e => saveAndApplyChar({ beardSize: parseInt(e.target.value, 10) }));
+document.getElementById('inp-avatar').addEventListener('change', e => saveAndApplyChar({ avatarId: e.target.value }));
+document.getElementById('inp-height').addEventListener('input', e => saveAndApplyChar({ heightScale: parseFloat(e.target.value) }));
+document.getElementById('inp-circuit-glow').addEventListener('input', e => saveAndApplyChar({ circuitIntensity: parseFloat(e.target.value) }));
 document.getElementById('inp-outfit').addEventListener('change', e => saveAndApplyChar({ outfit: e.target.value }));
 
 function setStudioMode(open) {
@@ -249,7 +223,8 @@ function setStudioMode(open) {
   rightControls.style.display = open ? 'none' : 'flex';
   if (open) {
     character.root.visible = true;
-    studioYaw = player.facingYaw + Math.PI + 0.24; // Dramatic 3/4 portrait angle
+    // Open directly on the signature 3/4 portrait showing right-cheek neural circuits!
+    studioYaw = player.facingYaw + Math.PI - 0.36;
     syncStudioUI();
   } else {
     character.root.visible = player.thirdPerson;
@@ -416,7 +391,7 @@ function animate() {
       if (keys['ArrowLeft']) player.yaw += 1.9 * dt;
       if (keys['ArrowRight']) player.yaw -= 1.9 * dt;
 
-      const speed = (player.sprint || keys['ShiftLeft']) ? 11.2 : 6.2;
+      const speed = (player.sprint || keys['ShiftLeft']) ? 10.8 : 5.8;
       const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
       const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
       const moveDir = new THREE.Vector3().addScaledVector(forward, -my).addScaledVector(right, mx);
@@ -434,7 +409,7 @@ function animate() {
         const step = diff * Math.min(1, dt * 11);
         player.facingYaw += step;
         turnDelta = step;
-        player.animTime += dt * (player.sprint ? 11.5 : 8.2);
+        player.animTime += dt * (player.sprint ? 11.2 : 8.0);
       }
 
       const bound = currentWorld.boundary || 35;
@@ -456,7 +431,7 @@ function animate() {
       }
     }
 
-    // Position & Animate Character with Real-Time Physics
+    // Position & Animate Real 3D Human Character
     character.root.position.copy(player.pos);
     character.root.rotation.y = (player.thirdPerson || studioOpen) ? player.facingYaw : player.yaw;
     character.updateAnimation(dt, elapsed, {
@@ -469,42 +444,44 @@ function animate() {
       studioOpen
     });
 
-    // Camera System: Studio Portrait Camera OR Gameplay 3rd/1st Person
-    const hScale = character.getHeightScale();
+    // Camera System: Real 3D Studio Portrait OR Gameplay 3rd/1st Person
+    const headY = character.getHeadY();
+    const fullH = character.getCharHeight();
+
     if (studioOpen) {
       studioLightRig.position.copy(player.pos);
       studioLightRig.rotation.y = player.facingYaw;
 
-      const dist = studioFaceZoom ? 0.78 : 2.55;
-      const focusY = (studioFaceZoom ? 1.66 : 0.96) * hScale;
-      const sideOffset = studioFaceZoom ? 0.16 : 0.56;
+      const dist = studioFaceZoom ? 0.72 : 2.35;
+      const focusY = studioFaceZoom ? headY - 0.02 : fullH * 0.54;
+      const sideOffset = studioFaceZoom ? 0.16 : 0.52;
       const sideX = Math.cos(studioYaw) * sideOffset;
       const sideZ = -Math.sin(studioYaw) * sideOffset;
 
       camTarget.set(player.pos.x + sideX, player.pos.y + focusY, player.pos.z + sideZ);
       desiredCamPos.set(
         player.pos.x + Math.sin(studioYaw) * dist + sideX,
-        player.pos.y + focusY + (studioFaceZoom ? 0.02 : 0.18),
+        player.pos.y + focusY + (studioFaceZoom ? 0.02 : 0.15),
         player.pos.z + Math.cos(studioYaw) * dist + sideZ
       );
       camera.position.lerp(desiredCamPos, Math.min(1, dt * 10));
       camera.lookAt(camTarget);
       actionBtn.style.display = 'none';
     } else if (player.thirdPerson) {
-      const dist = 3.9;
+      const dist = 3.6;
       const horiz = Math.cos(player.pitch) * dist;
       const vert = -Math.sin(player.pitch) * dist;
-      camTarget.set(player.pos.x, player.pos.y + 1.48 * hScale, player.pos.z);
+      camTarget.set(player.pos.x, player.pos.y + fullH * 0.84, player.pos.z);
       desiredCamPos.set(
         camTarget.x + Math.sin(player.yaw) * horiz,
-        Math.max(currentWorld.getHeight(camTarget.x, camTarget.z) + 0.5, camTarget.y + vert + 0.3),
+        Math.max(currentWorld.getHeight(camTarget.x, camTarget.z) + 0.5, camTarget.y + vert + 0.28),
         camTarget.z + Math.cos(player.yaw) * horiz
       );
       camera.position.lerp(desiredCamPos, Math.min(1, dt * 14));
       camera.lookAt(camTarget);
     } else {
-      const bob = (player.onGround && isMoving) ? Math.sin(player.animTime) * 0.035 : 0;
-      camera.position.set(player.pos.x, player.pos.y + 1.66 * hScale + bob, player.pos.z);
+      const bob = (player.onGround && isMoving) ? Math.sin(player.animTime) * 0.032 : 0;
+      camera.position.set(player.pos.x, player.pos.y + headY + bob, player.pos.z);
       camera.rotation.order = 'YXZ';
       camera.rotation.y = player.yaw;
       camera.rotation.x = player.pitch;
